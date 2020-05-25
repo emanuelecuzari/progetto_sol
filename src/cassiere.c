@@ -6,12 +6,12 @@
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
-#include "codaCassa.h"
-#include "cassiere.h"
-#include "bool.h"
-#include "cliente.h"
-#include "util.h"
-#include "direttore.h"
+#include <codaCassa.h>
+#include <cliente.h>
+#include <cassiere.h>
+#include <util.h>
+#include <bool.h>
+#include <direttore.h>
 
 /*pid del processo supermercato*/
 extern pid_t pid;

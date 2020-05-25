@@ -5,11 +5,11 @@
 #include <pthread.h>
 #include <time.h>
 #include <signal.h>
-#include "codaCassa.h"
-#include "cliente.h"
-#include "cassiere.h"
-#include "util.h"
-#include "bool.h"
+#include <codaCassa.h>
+#include <cliente.h>
+#include <cassiere.h>
+#include <util.h>
+#include <bool.h>
 
 /* pid del processo supermecato */
 extern pid_t pid;

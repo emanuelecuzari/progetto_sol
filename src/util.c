@@ -5,7 +5,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <errno.h>
-#include "util.h"
+#include <util.h>
 
 //implementazione dell'interfaccia util.h
 

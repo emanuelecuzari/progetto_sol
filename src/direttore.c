@@ -4,16 +4,21 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
-#include "codaCassa.h"
-#include "cliente.h"
-#include "cassiere.h"
-#include "util.h"
-#include "bool.h"
-#include "direttore.h"
-#include "icl_hash.h"
+#include <cliente.h>
+#include <cassiere.h>
+#include <util.h>
+#include <bool.h>
+#include <direttore.h>
+#include <icl_hash.h>
 
 /* pid del processo supermecato */
 extern pid_t pid;
+
+extern volatile int sig_hup;
+
+/*-----------------------------------FUNZIONI DI UTILITA'-------------------------------------*/
+static bool check_state(directorArgs_t* director, director_state_opt* s);
+/*--------------------------------------------------------------------------------------------*/
 
 void* Direttore(void* arg){
     /* maschera di segnali */
@@ -29,8 +34,12 @@ void* Direttore(void* arg){
     }
 
     directorArgs_t* direttore=(directorArgs_t*)arg;
-    director_state_opt* state=direttore->stato
+    director_state_opt* state = direttore->stato;
+    check_state(direttore, state);
+
     while(state==ATTIVO){
+        /* controllo che non sia arrivato un segnale */
+        if(!check_state(direttore, state)) break;
         
         /* lettura notifica */
         if(Lock_Acquire(&direttore->mtx)!=0){
@@ -94,13 +103,13 @@ void* Direttore(void* arg){
             if(direttore->checkbox[i]->state==OPEN && res >= direttore->boundOpen)
             /* controllo gli stati delle casse per aprirne una che era chiusa */
                 for(size_t i = 0; i < direttore->tot_casse, i++){
-                    if(direttore->state[i] == CLOSED){
+                    if(direttore->stato_casse[i] == CLOSED){
                         if(pthread_create(&direttore->thid_casse[i], NULL, Cassiere, direttore->checkbox[i])!=0){
                             perror("CRITICAL ERROR\n");
                             kill(pid, SIGUSR2);
                         }
+                        direttore->stato_casse[i] == OPEN;
                         *(direttore->checkbox[i]->state) == OPEN;
-                        *(direttore->state[i]) == OPEN;
                         *(direttore->casse_chiuse)--;
                         *(direttore->casse_aperte)++;
                         printf("Il direttore ha aperto la cassa %d\n", i+1);
@@ -118,6 +127,7 @@ void* Direttore(void* arg){
             perror("CRITICAL ERROR\n");
             kill(pid, SIGUSR2);
         }
+        int conta_uscite = 0;
         for(size_t i = 0; i < direttore->tot_clienti; i++){
             if(direttore->customer[i]->out){
                 direttore->customer[i]->autorizzazione = true;
@@ -125,6 +135,7 @@ void* Direttore(void* arg){
                     perror("CRITICAL ERROR\n");
                     kill(pid, SIGUSR2);
                 }
+                conta_uscite++;
             }
         }
         if(Lock_Release(&direttore->mtx)!=0){
@@ -133,9 +144,61 @@ void* Direttore(void* arg){
         }
 
         /* autorizzazione entrata cliente */
-
-
-        /* arriva segnale, break del while */
-
+        if(Lock_Acquire(&direttore->mtx)!=0){
+            perror("CRITICAL ERROR\n");
+            kill(pid, SIGUSR2);
+        }
+        for(size_t i = 0; i < conta_uscite; i++){
+            if(pthread_create(&direttore->thid_clienti[i], NULL, cliente, direttore->customer[i]) != 0){
+                perror("CRITICAL ERROR\n");
+                kill(pid, SIGUSR2);
+            }
+        }
+        if(Lock_Release(&direttore->mtx)!=0){
+            perror("CRITICAL ERROR\n");
+            kill(pid, SIGUSR2);
+        }
     }
+    /* chiudo tutte le casse */
+    if(Lock_Acquire(&direttore->mtx)!=0){
+        perror("CRITICAL ERROR\n");
+        kill(pid, SIGUSR2);
+    }
+    for(size_t i = 0; i < direttore->tot_casse; i++){
+        if(direttore->stato_casse[i] != CLOSED){
+            if(sig_hup){
+                direttore->stato_casse[i] == CLOSING_MARKET;
+                *(direttore->checkbox[i]->state) == CLOSING_MARKET;
+            }
+            else{
+                direttore->stato_casse[i] == SHUT_DOWN;
+                *(direttore->checkbox[i]->state) == SHUT_DOWN;
+            }
+        }
+    }
+    if(Lock_Release(&direttore->mtx)!=0){
+        perror("CRITICAL ERROR\n");
+        kill(pid, SIGUSR2);
+    }
+    /* se ci sono clienti in attesa uscita, li autorizzo */
+    return NULL;
+}
+
+static bool check_state(directorArgs_t* director, director_state_opt* s){
+    if(Lock_Acquire(&director->check)!=0){
+        perror("CRITICAL ERROR\n");
+        kill(pid, SIGUSR2);
+    }
+    if(*s != ATTIVO){
+        if(Lock_Release(&direttore->check)!=0){
+            perror("CRITICAL ERROR\n");
+            kill(pid, SIGUSR2);
+        }
+        return false;
+    }
+    if(Lock_Release(&direttore->check)!=0){
+        perror("CRITICAL ERROR\n");
+        kill(pid, SIGUSR2);
+    }
+    return true;
 }

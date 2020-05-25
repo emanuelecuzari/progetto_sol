@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "codaCassa.h"
-#include "util.h"
+#include <codaCassa.h>
+#include <util.h>
 
 /* file di implementazione dell'interfaccia per la bounded queue della cassa */
 
