@@ -36,6 +36,7 @@ void* cliente(void* arg){
     sigaddset(&set, SIGHUP);
     sigaddset(&set, SIGUSR2);
     sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGTSTP);
     if(pthread_sigmask(SIG_SETMASK, &set, NULL)!=0){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
