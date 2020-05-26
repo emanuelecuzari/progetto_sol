@@ -1,7 +1,7 @@
+/* interfaccia per la definizione del thread cliente */
+
 #if !defined(CLIENTE_H)
 #define CLIENTE_H
-
-/* interfaccia per la definizione del thread cliente */
 
 #define T_MIN 10        /* tempo minimo acquisti(in millisecondi) */
 

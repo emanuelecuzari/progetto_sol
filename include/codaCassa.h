@@ -1,3 +1,5 @@
+/* interfaccia per definizione coda bounded della cassa */
+
 #if !defined(CODACASSA_H)
 #define CODACASSA_H
 

@@ -1,7 +1,7 @@
+/*interfaccia per la definizione del thread cassiere*/
+
 #if !defined(CASSIERE_H)
 #define CASSIERE_H
-
-/*interfaccia per la definizione del thread cassiere*/
 
 #define MIN_REGULAR_TIME 20
 #define MAX_REGULAR_TIME 80
