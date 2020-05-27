@@ -206,6 +206,10 @@ static void notify(Cassa_t* c){
     directorArgs_t* d;
     *(c->notifica)=c->coda->clienti;
     *(d->update)=true;
+    if(cond_signal(c->update_cond) == -1){
+        perror("CRITICAL ERROR\n");
+        kill(pid, SIGUSR2);
+    }
     if(Lock_Release(&c->mtx)!=0){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);

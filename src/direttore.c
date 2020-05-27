@@ -103,14 +103,13 @@ void* Direttore(void* arg){
                 }
             }
         }
-        clientArgs_t* cliente = direttore->customer
         if(Lock_Release(&direttore->mtx)!=0){
             perror("CRITICAL ERROR\n");
             kill(pid, SIGUSR2);
         }
 
         /* autirizzazione uscita cliente */
-        clientArgs_t** cliente = direttore->customer;
+        clientArgs_t* cliente = direttore->customer;
         auth_exit(direttore, cliente);
 
         /* autorizzazione entrata cliente */
@@ -196,6 +195,12 @@ static int accept_notify(directorArgs_t* director, icl_hash_t* h){
         }
         printf("Il direttore ha ricevuto la notifica: dati aggiornati!\n");
         *(director->update)=false;
+    }
+    else{
+        if(cond_wait(director->update_cond, director->mtx) == -1){
+            perror("CRITICAL ERROR\n");
+            kill(pid, SIGUSR2);
+        }
     }
     if(Lock_Release(&director->mtx)!=0){
         perror("CRITICAL ERROR\n");

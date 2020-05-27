@@ -21,7 +21,8 @@ static void no_stuff(clientArgs_t* customer);
 
 void* cliente(void* arg){
     clientArgs_t* customer=(clientArgs_t*)arg;
-    unsigned int seme=customer->seed;             //seme per generare randomicamente cassa in cui andare
+    /* seme per generare randomicamente cassa in cui andare */
+    unsigned int seme=customer->seed;             
     int myid=customer->thid;
     int prod=customer->prodotti;
     int casse_attive=customer->casse_aperte;
@@ -67,7 +68,7 @@ void* cliente(void* arg){
             }
 
             /* se cliente si deve spostare rieseguo ciclo, break altrimenti*/
-            if(state!=CHANGE) break;
+            if(state != CHANGE) break;
             else printf("Il cliente %d deve cambiare cassa\n", myid);
 
         }
@@ -108,7 +109,7 @@ static void to_queue(clientArgs_t* customer, unsigend int* seed){
     }
     /* scelgo radomicamente la cassa */
     int indice=1 + (rand_r(seed) % (customer->casse_aperte));
-    for(int i=1; i <= tot; i++){
+    for(size_t i=1; i <= tot; i++){
         if(customer->cashbox_state[i-1]==OPEN ){
             if(indice==1){
                 if(insert(customer->cashbox_queue[i-1], customer)==-1){

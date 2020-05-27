@@ -52,7 +52,7 @@ int set_val(void* value, icl_hash_t* h, char* key, bool flag){
     return 0;
 }
 
-int parse(config_t* config){
+int parse(char* config_filename, config_t* config){
     FILE* fp;
     icl_hash_t* hashtable;
     CHECK_NULL((hashtable=icl_hash_create(NBUCKETS, NULL, NULL)));
@@ -60,7 +60,7 @@ int parse(config_t* config){
     char valore[MAX_INPUT];
     char* real_name = NULL;
     char* real_val = NULL;
-    if((fp = fopen(config->filename, "r")) == NULL){
+    if((fp = fopen(config_filename, "r")) == NULL){
         perror("in apertura file\n");
         return -1;
     }
