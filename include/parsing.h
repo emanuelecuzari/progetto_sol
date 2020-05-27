@@ -20,9 +20,10 @@ typedef struct config{
     char filename[MAX_INPUT];       /* nome file di log */
 }config_t;
 
-int parse(config_t* config);
+int parse(char* config_filename, config_t* config);
 /**
  * funzione che svolge parsing del file di configurazione
+ * @param config_filename nome del file di configurazione
  * @param config struttura contenente i dati a cui asscoiare i valori presenti nel file
  * @return 0 success, -1 failure
 */

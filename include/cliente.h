@@ -10,16 +10,16 @@ typedef struct clientArgs{
     int thid;
     int prodotti;
     int num_casse;
-    int casse_aperte;           /* numero casse aperte */
-    int out;                    /* flag per dire se cliente è uscito */
+    int casse_aperte;                   /* numero casse aperte */
+    int out;                            /* flag per dire se cliente è uscito */
     int* tot_uscite;
     unsigned int seed;              
-    size_t t_acquisti;          /* tempo per gli acquisti */
-    pthread_mutex_t mtx;
-    pthread_mutex_t exit;       /* mutex per controllare le uscite */
-    pthread_cond_t cond;        
-    pthread_cond_t authorized;  /* var di condizionamento per attendere autorizzazione */
-    bool autorizzazione;       /* autorizzaione a uscire da supermercato */
+    size_t t_acquisti;                  /* tempo per gli acquisti */
+    bool autorizzazione;                /* autorizzaione a uscire da supermercato */
+    pthread_mutex_t* mtx;
+    pthread_mutex_t* exit;              /* mutex per controllare le uscite */
+    pthread_cond_t* cond;        
+    pthread_cond_t* authorized;         /* var di condizionamento per attendere autorizzazione */
     Queue_t** cashbox_queue;            /* array code casse */
     client_state_opt* state;
     stato_cassa_opt* cashbox_state;     /* array stati casse */

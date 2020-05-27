@@ -14,8 +14,9 @@ typedef struct Cassa{
     size_t gest_prod;       //tempo gestione singolo prodotto
     size_t t_fisso;         //tempo fisso della cassa; randomico tra 20-80 msec
     Queue_t* coda;
-    pthread_mutex_t mtx;
-    pthread_cond_t cond;
+    pthread_mutex_t* mtx;
+    pthread_cond_t* cond;
+    pthread_cond_t* update_cond;
     stato_cassa_opt* state; //stato cassa         
 }Cassa_t;
 
