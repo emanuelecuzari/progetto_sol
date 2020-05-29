@@ -5,6 +5,11 @@
 
 /*interfaccia per definzione di alcune funzioni di utlità*/
 
+typedef enum _bool{
+    true=1,
+    false=0
+}bool;
+
 int msleep(long msec);
 /**
  * funzione che manda processo in pausa

@@ -7,17 +7,22 @@
 
 /* struttura per gli argomenti utili al thread */
 typedef struct clientArgs{
-    int thid;
+    int id;
     int prodotti;
     int num_casse;
     int casse_aperte;                   /* numero casse aperte */
     int out;                            /* flag per dire se cliente è uscito */
     int* tot_uscite;
-    unsigned int seed;              
+    int change;
+    unsigned int seed;
+    long t_inmarket;              
     size_t t_acquisti;                  /* tempo per gli acquisti */
     bool autorizzazione;                /* autorizzaione a uscire da supermercato */
+    struct timeval ts_incoda;           /* tempo entrata in coda cassa */
+    struct timeval tend_incoda;         /* tempo uscita da coda cassa */
     pthread_mutex_t* mtx;
     pthread_mutex_t* exit;              /* mutex per controllare le uscite */
+    pthread_mutex_t* personal;          /* mutex del cliente */
     pthread_cond_t* cond;        
     pthread_cond_t* authorized;         /* var di condizionamento per attendere autorizzazione */
     Queue_t** cashbox_queue;            /* array code casse */

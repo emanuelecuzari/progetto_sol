@@ -9,7 +9,9 @@
 /*struttura per argomenti del thread*/
 typedef struct Cassa{ 
     int id;                 //indice che identifica cassa
+    int closed;             //numero chiusure
     int* notifica;
+    int served;            //clienti serviti
     size_t t_trasmissione;  //tempo che trascorre tra un'invio dei dati al direttore e un altro;
     size_t gest_prod;       //tempo gestione singolo prodotto
     size_t t_fisso;         //tempo fisso della cassa; randomico tra 20-80 msec

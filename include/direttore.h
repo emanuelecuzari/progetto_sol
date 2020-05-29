@@ -13,22 +13,27 @@ typedef enum state{
 
 typedef struct direttore{
     int tot_casse;
+    int* id_cliente;
+    int e;
     int boundOpen;                  /* soglia per apertura cassa */
     int boundClose;                 /* soglia per chiusura cassa */
     int* casse_chiuse;              /* num casse chiuse */
     int* casse_aperte;              /* num casse aperte */
-    int* tot_clienti;               /* num clienti in supermercato */
+    int tot_clienti;                /* num clienti */
     bool* update;                   /* true quando notifica arriva */
-    Cassa_t* checkbox;              /* array di casse */
-    stato_cassa_opt* stato_casse;   /* array stato casse */
+    bool* is_out;
+    int* conta_uscite;
+    Cassa_t** checkbox;              /* array di casse */
     icl_hash_t* hashtable;          /* hash per associazione code-clienti*/
-    clientArgs_t* customer;         /* array di clienti */
+    clientArgs_t** customer;         /* array di clienti */
     director_state_opt* stato;
     pthread_t* thid_casse;
     pthread_t* thid_clienti;
     pthread_mutex_t* mtx;
     pthread_mutex_t* check;
+    pthread_mutex_t* exit;
     pthread_cond_t* update_cond;
+    pthread_cond_t* exit_cond;
 }directorArgs_t;
 
 void* Direttore(void* arg);
