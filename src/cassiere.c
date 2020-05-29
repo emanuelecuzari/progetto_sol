@@ -10,7 +10,6 @@
 #include <cliente.h>
 #include <cassiere.h>
 #include <util.h>
-#include <bool.h>
 #include <direttore.h>
 
 /*pid del processo supermercato*/
@@ -24,12 +23,11 @@ static void notify(Cassa_t* c);
 /*--------------------------------------------------------------------------------------------*/
 
 void* Cassiere(void* arg){
-    int closed=0;                               //numero chiusure
-    int num_clienti=0;                          //numero clienti serviti
+    int servi_primo = 1;                        /* flag */
     int t_invio_dati=cassa->t_trasmissione;
     long t_apertura;
     long t_servizio;                            //tempo di servizio cliente --> T(n)= tempo fisso + (num_prodotti * t_gestione_prodotto);
-    struct timeval start_open, end_open;        //inizio e fine apertura
+    struct timeval start_open = {0, 0};        //inizio
     /* ---argomenti thread--- */
     Cassa_t* cassa=((Cassa_t*)arg);
     int myid=cassa->id;
@@ -59,12 +57,11 @@ void* Cassiere(void* arg){
         bool check = check_state(&cassa, &stato);
         if(!check) break;
 
-        /** se cassa aperta ma coda vuota, termina senza fare niente 
-         * NOTA: se cassa ha un cliente, ammetto lo stesso che 
-         * invii una notifica al direttore, anche se in coda non
-         * c'è più nessuno
-        */
-        if(isEmpty(cassa->coda)==0) pthread_exit((void*)0);
+        /* se cassa aperta ma coda vuota, invio lo stesso notifica */
+        if(isEmpty(cassa->coda)==0){
+            notify(cassa);
+            continue;
+        }
 
         /* servo cliente */
         void* client=pop(cassa->coda);
@@ -73,6 +70,7 @@ void* Cassiere(void* arg){
             kill(pid, SIGUSR2);
         }
         clientArgs_t* cliente=(clientArgs_t*)client;
+        gettimeofday(&cliente->tend_incoda);
         t_servizio=t_base + (cliente->prodotti * t_prodotto);
         set_customer_state(cliente, PAYING);
 
@@ -90,13 +88,60 @@ void* Cassiere(void* arg){
         msleep(t_servizio);
         t_invio_dati= t_invio_dati-t_servizio;
         set_customer_state(cliente, PAID);
-        num_clienti++;
+        cassa->served++;
     }
+    /* chiusura cassa */
+    cassa->closed++;
+    struct timeval end_open = {0, 0};
     gettimeofday(&end_open, NULL);
-    t_apertura=(end_open.tv_sec * 1000 + end_open.tv_usec)-(start_open.tv_sec * 1000 + start_open.tv_usec); 
-    closed++;
-    svuota(cassa, stato);     
-    pthread_exit((void*)0);
+    t_apertura=(end_open.tv_sec * 1000 + end_open.tv_usec)-(start_open.tv_sec * 1000 + start_open.tv_usec);
+    while(1){
+        if(isEmpty(coda->cassa) == 0) break;
+        void* client = pop(coda->cassa);
+        if(client==NULL){
+            perror("CRITICAL ERROR\n");
+            kill(pid, SIGUSR2);
+        }
+        clientArgs_t* cliente=(clientArgs_t*)client;
+        gettimeofday(&cliente->tend_incoda);
+        if(*stato == CLOSING_MARKET){
+            if(Lock_Acquire(&cliente->personal) != 0){
+                perror("CRITICAL ERROR\n");
+                kill(pid, SIGUSR2);
+            }
+            t_servizio=t_base + (cliente->prodotti * t_prodotto);
+            set_customer_state(cliente, PAYING);
+            if(Lock_Release(&cliente->personal) != 0){
+                perror("CRITICAL ERROR\n");
+                kill(pid, SIGUSR2);
+            }
+            msleep(t_servizio);
+            set_customer_state(cliente, PAID);
+            cassa->served++;
+        }
+        else{
+            /* se SIGQUIT, servo comunque il primo cliente */
+            if(servi_primo){
+                if(Lock_Acquire(&cliente->personal) != 0){
+                    perror("CRITICAL ERROR\n");
+                    kill(pid, SIGUSR2);
+                }
+                t_servizio=t_base + (cliente->prodotti * t_prodotto);
+                set_customer_state(cliente, PAYING);
+                if(Lock_Release(&cliente->personal) != 0){
+                    perror("CRITICAL ERROR\n");
+                    kill(pid, SIGUSR2);
+                }
+                msleep(t_servizio);
+                set_customer_state(cliente, PAID);
+                cassa->served++;
+                servi_primo = 0;
+            }
+            else set_customer_state(cliente, SIGNAL_OUT);
+        }
+    }
+    printf("cassa %d chiusa fino a nuova apertura\n", myid);
+    return NULL;
 }
 
 /**
@@ -155,18 +200,6 @@ static void svuota(Cassa_t* c, stato_cassa_opt* s){
         else if(*s==CLOSED){
             set_customer_state(cliente, CHANGE);
         }
-        /* gestito in un'altra funzione */
-        
-        /*else if(*s==CLOSING_MARKET){
-            t_servizio=c->t_fisso + (cliente->prodotti * c->gest_prod);
-            msleep(t_servizio);
-            set_customer_state(cliente, SIGNAL_OUT);
-        }
-        else{
-            t_servizio=c->t_fisso + (cliente->prodotti * c->gest_prod);
-            msleep(t_servizio);
-            set_customer_state(cliente, SIGNAL_OUT);
-        }*/
     }
 }
 
@@ -176,7 +209,7 @@ static void svuota(Cassa_t* c, stato_cassa_opt* s){
  * @param s stato da settare
 */
 static void set_customer_state(clientArgs_t* cliente, client_state_opt* s){
-    if(Lock_Acquire(&cliente->mtx)!=0){
+    if(Lock_Acquire(&cliente->personal)!=0){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
     }
@@ -188,7 +221,7 @@ static void set_customer_state(clientArgs_t* cliente, client_state_opt* s){
             kill(pid, SIGUSR2);
         }
     }
-    if(Lock_Release(&cliente->mtx)!=0){
+    if(Lock_Release(&cliente->personal)!=0){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
     }

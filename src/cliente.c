@@ -4,12 +4,12 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <codaCassa.h>
 #include <cliente.h>
 #include <cassiere.h>
 #include <util.h>
-#include <bool.h>
 
 /* pid del processo supermecato */
 extern pid_t pid;
@@ -23,12 +23,15 @@ void* cliente(void* arg){
     clientArgs_t* customer=(clientArgs_t*)arg;
     /* seme per generare randomicamente cassa in cui andare */
     unsigned int seme=customer->seed;             
-    int myid=customer->thid;
+    int myid=customer->id;
     int prod=customer->prodotti;
     int casse_attive=customer->casse_aperte;
     long buying=customer->t_acquisti;
     int tot=customer->num_casse;
     client_state_opt* state=customer->state;
+
+    struct timeval ts_inmarket = {0, 0};
+    struct timeval tend_inmarket = {0, 0};
 
     /* maschera di segnali */
     sigset_t set;
@@ -44,9 +47,11 @@ void* cliente(void* arg){
     }
 
     /* cliente fa acquisti */
+    gettimeofday(&ts_inmarket, NULL);
     msleep(buying);
 
     if(prod > 0){
+        gettimeofday(&customer->ts_incoda, NULL);
         while(1){
             /* inserisco in coda il cliente */
             to_queue(customer, &seme);
@@ -69,7 +74,10 @@ void* cliente(void* arg){
 
             /* se cliente si deve spostare rieseguo ciclo, break altrimenti*/
             if(state != CHANGE) break;
-            else printf("Il cliente %d deve cambiare cassa\n", myid);
+            else{
+                customer->change++;
+                printf("Il cliente %d deve cambiare cassa\n", myid);
+            }
 
         }
     }
@@ -77,7 +85,9 @@ void* cliente(void* arg){
         no_stuff(customer);
         printf("Il cliente %d esce senza comprare\n", myid);
     }
-
+    gettimeofday(&tend_inmarket, NULL);
+    customer->t_inmarket = (tend_inmarket.tv_sec * 1000 + tend_inmarket.tv_usec) - (ts_inmarket.tv_sec * 1000 + ts_inmarket.tv_usec);
+    printf("Il cliente %d esce con stato %s\n", myid, customer->state);
     /* gestione uscita */
     if(Lock_Acquire(&customer->exit)!=0){
                 perror("CRITICAL ERROR\n");
@@ -89,7 +99,7 @@ void* cliente(void* arg){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
     }
-    pthread_exit((void*)0);
+    return NULL;
 }
 
 /**
@@ -115,7 +125,16 @@ static void to_queue(clientArgs_t* customer, unsigend int* seed){
                 if(insert(customer->cashbox_queue[i-1], customer)==-1){
                     kill(pid, SIGUSR2);
                 }
+                if(Lock_Acquire(customer->personal) != 0){
+                    perror("CRITICAL ERROR\n");
+                    kill(pid, SIGUSR2);
+                }
                 customer->state=IN_QUEUE;
+                if(Lock_Release(customer->personal) != 0){
+                    perror("CRITICAL ERROR\n");
+                    kill(pid, SIGUSR2);
+                }
+                gettimeofday(&customer->ts_incoda, NULL);
                 printf("Il cliente %d è in coda alla cassa %d\n", myid, i);
                 break;
             }

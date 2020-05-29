@@ -125,7 +125,7 @@ int isEmpty(Queue_t* q){
             break;
         }
     }
-    Lock_Release(&q->mtx_coda);
     if(flag==1) return -1
+    Lock_Release(&q->mtx_coda);
     return 0;
 }

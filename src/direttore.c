@@ -7,14 +7,14 @@
 #include <cliente.h>
 #include <cassiere.h>
 #include <util.h>
-#include <bool.h>
 #include <direttore.h>
 #include <icl_hash.h>
 
 /* pid del processo supermecato */
 extern pid_t pid;
 
-extern volatile int sig_hup;
+/* variabile globale che può essere modificata*/
+extern volatile sig_atomic_t sig_hup;
 
 /*-----------------------------------FUNZIONI DI UTILITA'-------------------------------------*/
 static bool check_state(directorArgs_t* director, director_state_opt* s);
@@ -65,7 +65,6 @@ void* Direttore(void* arg){
             /* controllo se la cassa ha esattamente un cliente, perchè se non ne ha ed è aperta, il thread termina(vedi cassiere.c) */
             if(direttore->checkbox[i]->state==OPEN && res == 1 && direttore->casse_aperte >= direttore->boundClose){
                 *(direttore->checkbox[i]->state) == CLOSING;
-                *(direttore->state[i]) == CLOSING;
                 *(direttore->casse_chiuse)++;
                 *(direttore->casse_aperte)--;
                 printf("Il direttore ha chiuso la cassa %d\n", direttore->checkbox[i]->id);
@@ -89,12 +88,11 @@ void* Direttore(void* arg){
             if(direttore->checkbox[i]->state==OPEN && res >= direttore->boundOpen)
             /* controllo gli stati delle casse per aprirne una che era chiusa */
                 for(size_t i = 0; i < direttore->tot_casse, i++){
-                    if(direttore->stato_casse[i] == CLOSED){
+                    if(direttore->checkbox[i]->state == CLOSED){
                         if(pthread_create(&direttore->thid_casse[i], NULL, Cassiere, direttore->checkbox[i])!=0){
                             perror("CRITICAL ERROR\n");
                             kill(pid, SIGUSR2);
                         }
-                        direttore->stato_casse[i] == OPEN;
                         *(direttore->checkbox[i]->state) == OPEN;
                         *(direttore->casse_chiuse)--;
                         *(direttore->casse_aperte)++;
@@ -109,24 +107,9 @@ void* Direttore(void* arg){
         }
 
         /* autirizzazione uscita cliente */
-        clientArgs_t* cliente = direttore->customer;
+        clientArgs_t** cliente = direttore->customer;
         auth_exit(direttore, cliente);
 
-        /* autorizzazione entrata cliente */
-        if(Lock_Acquire(&direttore->mtx)!=0){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGUSR2);
-        }
-        for(size_t i = 0; i < conta_uscite; i++){
-            if(pthread_create(&direttore->thid_clienti[i], NULL, cliente, direttore->customer[i]) != 0){
-                perror("CRITICAL ERROR\n");
-                kill(pid, SIGUSR2);
-            }
-        }
-        if(Lock_Release(&direttore->mtx)!=0){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGUSR2);
-        }
     }
     /* chiudo tutte le casse */
     if(Lock_Acquire(&direttore->mtx)!=0){
@@ -134,13 +117,11 @@ void* Direttore(void* arg){
         kill(pid, SIGUSR2);
     }
     for(size_t i = 0; i < direttore->tot_casse; i++){
-        if(direttore->stato_casse[i] != CLOSED){
+        if(direttore->checkbox[i]->state != CLOSED){
             if(sig_hup){
-                direttore->stato_casse[i] == CLOSING_MARKET;
                 *(direttore->checkbox[i]->state) == CLOSING_MARKET;
             }
             else{
-                direttore->stato_casse[i] == SHUT_DOWN;
                 *(direttore->checkbox[i]->state) == SHUT_DOWN;
             }
         }
@@ -181,7 +162,7 @@ static int accept_notify(directorArgs_t* director, icl_hash_t* h){
     }
     if(director->update==true){
         for(size_t i = 0; i <= director->tot_casse; i++){
-            if(director->stato_casse[i]==CLOSED) continue;
+            if(director->checkbox[i]->state == CLOSED) continue;
             int key = director->checkbox[i]->id;
             int* dato = director->checkbox[i]->notifica;
             void** olddata;
@@ -214,17 +195,21 @@ static void auth_exit(directorArgs_t* director, clientArgs_t* customer){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
     }
-    int conta_uscite = 0;
     for(size_t i = 0; i < director->tot_clienti; i++){
-        if(customer[i]->out){
-            customer[i]->autorizzazione = true;
-            if(cond_signal(customer[i]->authorized)==-1){
-                perror("CRITICAL ERROR\n");
-                kill(pid, SIGUSR2);
+        if(!director->is_out[i]){
+            director->is_out[i] = true;
+            *(director->conta_uscite) = 0;
+            if(*(director->conta_uscite) < director->e){
+                customer[i]->autorizzazione = true;
+                if(cond_signal(customer[i]->authorized)==-1){
+                    perror("CRITICAL ERROR\n");
+                    kill(pid, SIGUSR2);
+                }
+                *(director->conta_uscite)++;
             }
-            conta_uscite++;
         }
     }
+    printf("Sono usciti %d clienti. Ancora %d all'interno\n", i+1, director->tot_clienti - (i+1));
     if(Lock_Release(&director->mtx)!=0){
         perror("CRITICAL ERROR\n");
         kill(pid, SIGUSR2);
