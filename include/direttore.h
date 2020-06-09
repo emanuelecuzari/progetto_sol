@@ -1,44 +1,48 @@
-/* interfaccia per definizione thread direttore */
+/**
+ * intrefaccia per definizione thread direttore
+*/
 
 #if !defined(DIRETTORE_H)
 #define DIRETTORE_H
 
-#define MIN_APERTURA 1
+#include <pthread.h>
+#include <cassiere.h>
+#include <icl_hash.h>
+#include <cliente.h>
 
-typedef enum state{
-    ATTIVO,
-    INT_SIGHUP,
-    INT_SIGQUIT
-}director_state_opt;
+#define MIN_OPEN 1
 
-typedef struct direttore{
-    int tot_casse;
-    int* id_cliente;
-    int e;
-    int boundOpen;                  /* soglia per apertura cassa */
-    int boundClose;                 /* soglia per chiusura cassa */
-    int* casse_chiuse;              /* num casse chiuse */
+typedef struct Direttore{
+    int e;                          /* numero clienti che può entrare/uscire */
+    int casse_tot;                  /* numero totale casse */
+    int boundClose;                 /* soglia chiusura cassa */
+    int boundOpen;                  /* soglia apertura cassa */
+    int tot_clienti;                /* numero totale clienti in supermercato */
+    icl_hash_t* hashtable;          /* hash per mantenere valori notifiche delle code delle casse */
+
+    /* mutex e var di cond. */
+    pthread_mutex_t* mtx;           /* mutex principale del sistema */
+    pthread_mutex_t* ask_auth;      /* mutex per autorizzazione uscita cliente */
+    pthread_mutex_t* sent;          /* mutex per gestione notifica dai cassieri */
+    pthread_mutex_t* out;           /* mutex per comunicare uscita */
+    pthread_cond_t* sent_cond;      /* var condizionamento per invio/ricezione notifica*/
+    pthread_cond_t* ask_auth_cond;  /* var di cond. per richiesta autorizzazione */
+    pthread_cond_t* out_cond;       /* var di cond. per comunicare uscita */
+
+    /* var condivise */
     int* casse_aperte;              /* num casse aperte */
-    int tot_clienti;                /* num clienti */
-    bool* update;                   /* true quando notifica arriva */
-    bool* is_out;
-    int* conta_uscite;
-    Cassa_t** checkbox;              /* array di casse */
-    icl_hash_t* hashtable;          /* hash per associazione code-clienti*/
-    clientArgs_t** customer;         /* array di clienti */
-    director_state_opt* stato;
-    pthread_t* thid_casse;
-    pthread_t* thid_clienti;
-    pthread_mutex_t* mtx;
-    pthread_mutex_t* check;
-    pthread_mutex_t* exit;
-    pthread_cond_t* update_cond;
-    pthread_cond_t* exit_cond;
-}directorArgs_t;
+    int* casse_chiuse;              /* num casse chiuse */
+    int* update;                    /* flag per ricezione notifica */
+    int* autorizzazione;            /* flag per autorizzazione a uscire */
+    argsCassiere_t* cassieri;       /* array di cassieri */
+    pthread_t* thid_casse;          /* array di thid casse */
+    
+}argsDirettore_t;
 
-void* Direttore(void* arg);
 /**
- * funzione che inizializza thread
- * @param arg argomento/i passati al thread(può essere una struct)
+ * funzione che inizializza cassiere
+ * @param arg argomento del thread; può essere una struct
 */
+void* direttore(void* arg);
+
 #endif /* DIRETTORE_H */

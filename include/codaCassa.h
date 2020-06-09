@@ -45,12 +45,4 @@ void* pop(Queue_t *q);
  * @return dato estratto se successo, -1 se errore
  */
 
-int isEmpty(Queue_t* q);
-/**
- * Controlla se coda è vuota
- * @param q coda
- * @return 0 success
- * @return -1 failure
-*/
-
 #endif /* CODACASSA_H */

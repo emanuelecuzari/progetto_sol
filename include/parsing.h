@@ -1,7 +1,12 @@
-/* interfaccia per definizione parsing del file di configurazione */
+/**
+ *  interfaccia per definizione parsing del file di configurazione 
+*/
 
 #if !defined(PARSING_H)
 #define PARSING_H
+
+#include <util.h>
+#include <icl_hash.h>
 
 #define MAXARGS 256
 #define MAX_INPUT 128
@@ -28,12 +33,4 @@ int parse(char* config_filename, config_t* config);
  * @return 0 success, -1 failure
 */
 
-int set_val(void* value, icl_hash_t* h, char* key, bool flag);
-/**
- * funzione che setta il valore della variabile nella struttura
- * @param value elemento della struttura dati cui associare il valore letto nel file
- * @param h hash table contenente i valori letti dal file
- * @param key chiave che devo cercare nell'hash per prelevare il valore da assegnare
- * @param flag booleano per distinguere stringhe da valori interi contenuti nel file
- * @return 0 success, -1 failure
-*/
+#endif /* PARSING_H */

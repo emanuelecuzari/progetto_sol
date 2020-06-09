@@ -1,49 +1,51 @@
-/* interfaccia per la definizione del thread cliente */
+/**
+ * interfaccia per definizione del thread cliente
+*/
 
 #if !defined(CLIENTE_H)
 #define CLIENTE_H
 
-#define T_MIN 10        /* tempo minimo acquisti(in millisecondi) */
+#include <pthread.h>
+#include <codaCassa.h>
+#include <cassiere.h>
 
-/* struttura per gli argomenti utili al thread */
-typedef struct clientArgs{
-    int id;
-    int prodotti;
-    int num_casse;
-    int casse_aperte;                   /* numero casse aperte */
-    int out;                            /* flag per dire se cliente è uscito */
-    int* tot_uscite;
-    int change;
-    unsigned int seed;
-    long t_inmarket;              
-    size_t t_acquisti;                  /* tempo per gli acquisti */
-    bool autorizzazione;                /* autorizzaione a uscire da supermercato */
-    struct timeval ts_incoda;           /* tempo entrata in coda cassa */
-    struct timeval tend_incoda;         /* tempo uscita da coda cassa */
-    pthread_mutex_t* mtx;
-    pthread_mutex_t* exit;              /* mutex per controllare le uscite */
-    pthread_mutex_t* personal;          /* mutex del cliente */
-    pthread_cond_t* cond;        
-    pthread_cond_t* authorized;         /* var di condizionamento per attendere autorizzazione */
-    Queue_t** cashbox_queue;            /* array code casse */
-    client_state_opt* state;
-    stato_cassa_opt* cashbox_state;     /* array stati casse */
-}clientArgs_t;
+#define MIN_T_ACQUISTI 10
 
-/* stati possibili assumbili dal cliente */
-typedef enum client_state{
-    IN_MARKET,          /* cliente entra nel supermercato*/
-    IN_QUEUE,           /* cliente in coda */
-    CHANGE,             /* cassa chiusa, cambia coda*/
-    PAYING,             /* cliente sta pagando */  
-    PAID,               /* cliente ha pagato */
-    SIGNAL_OUT          /* interruzione: esci */
-}client_state_opt;
+typedef struct Cliente{
+    int id;                         /* id cleinte */
+    int e;                          /* numero clienti che può uscire */
+    int cambi;                      /* quante volte ha cambiato coda */
+    int casse_tot;                  /* numero casse totali */
+    int num_prodotti;               /* prodotti che acquista */
+    unsigned int seed;              /* seme per scelta randomica cassa */
+    struct timeval ts_incoda;       /* inzio attesa in coda*/
+    struct timeval tend_incoda;     /* fine attesa in coda */
+    size_t t_acquisti;              /* tempo per acquisti */
+    size_t t_supermercato;          /* tempo trascorso nel supermercato */
 
-void* cliente(void* arg);
+    /* mutex e var di cond. */
+    pthread_mutex_t* mtx;           /* mutex principale del sistema */
+    pthread_mutex_t* personal;      /* muetx esclusiva del cliente */
+    pthread_mutex_t* ask_auth;      /* mutex per richiesta autorizzazione */
+    pthread_mutex_t* out;           /* mutex per comunicare uscita */
+    pthread_cond_t* ask_auth_cond;  /* var di cond. per richiesta autorizzazione */
+    pthread_cond_t* out_cond;       /* var di cond. per comunicare uscita */
+    pthread_cond_t* wait;           /* var di cond. per attesa turno */
+
+    /* var condivise */
+    int is_out;                     /* flag per uscita cliente */
+    int* autorizzazione;            /* autorizzazione per uscita */
+    int* set_change;                /* flag per indicare se deve cambiare cassa */
+    int* set_wait;                  /* flag per attesa in coda */
+    int* num_uscite;                /* numero di clienti che escono */
+    argsCassiere_t* cassieri;       /* array di cassieri/casse */
+    Queue_t** code;                 /* array di code */
+}argsClienti_t*;
+
 /**
- * funzione che inizializza thread
- * @param arg argomento/i passati al thread(può essere una struct)
+ * funzione che inizializza cassiere
+ * @param arg argomento del thread; può essere una struct
 */
+void* cliente(void* arg);
 
 #endif /* CLIENTE_H */
