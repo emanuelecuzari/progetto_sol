@@ -1,24 +1,24 @@
-@Formato file:
-@NOME:VALORE
-@max casse
+>Formato file:
+>NOME:VALORE
+>max casse
 K:6
-@max clienti
+>max clienti
 C:50
-@numero di clienti che escono e entrano
+>numero di clienti che escono e entrano
 E:3
-@max tempo acquisti
+>max tempo acquisti
 T:200
-@max numero prodotti acquisitati
+>max numero prodotti acquisitati
 P:100
-@bound per chiusura cassa(espresso in numero casse con un cliente in coda)
+>bound per chiusura cassa(espresso in numero casse con un cliente in coda)
 S1:2
-@bound per apertura cassa(espresso in num clienti in coda)
+>bound per apertura cassa(espresso in num clienti in coda)
 S2:10
-@intervallo trasmissione notifica
+>intervallo trasmissione notifica
 INTERVALLO:300
-@tempo per elaborazione di un prodotto
+>tempo per elaborazione di un prodotto
 TEMPO_GESTIONE_PROD:2
-@num casse aperte all'inizio
+>num casse aperte all'inizio
 CASSE_INIZIALI:3
-@nome del file di log
+>nome del file di log
 FILENAME:stat.log
