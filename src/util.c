@@ -19,52 +19,38 @@ int msleep(long msec){
     t.tv_sec=msec/1000;
     t.tv_nsec=(msec%1000)*1000000;
     do {
-        res = nanosleep(&t, &t);
+        retval = nanosleep(&t, &t);
     } while (retval && errno == EINTR);
-
     return retval;
 }
 
-int Lock_Acquire(pthread_mutex_t* mtx){
-    int error=0;                    
-    if(pthread_mutex_lock(&mtx)!= 0){
-        errno=error;        //non conoscendo il tipo di errore eventualmente generato, setto errno a un valore indicativo
+int Lock_Acquire(pthread_mutex_t* mutex){                 
+    if(pthread_mutex_lock(mutex)!= 0){
+        perror("Lock not acquired\n");
         return -1;
     }
     return 0;
 }
 
-int Lock_Release(pthread_mutex_t* mtx){
-    int error=0; 
-    if(pthread_mutex_unlock(&mtx)!= 0){
-        errno=error;
+int Lock_Release(pthread_mutex_t* mutex){ 
+    if(pthread_mutex_unlock(mutex)!= 0){
+        perror("Lock not released\n");
         return -1;
     }
     return 0;
 }
 
-int cond_wait(pthread_cond_t* cond, pthread_mutex_t* mtx){
-    int error=0; 
-    if(pthread_cond_wait(&cond, &mtx)!= 0){
-        errno=error;
+int cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex){
+    if(pthread_cond_wait(cond, mutex)!= 0){
+        perror("Thread not suspended\n");
         return -1;
     }
     return 0;
 }
 
 int cond_signal(pthread_cond_t* cond){
-    int error=0; 
-    if(pthread_cond_signal(&cond)!= 0){
-        errno=error;
-        return -1;
-    }
-    return 0;
-}
-
-int cond_broadcast(pthread_cond_t* cond){
-    int error=0; 
-    if(pthread_cond_broadcast(&cond)!= 0){
-        errno=error;
+    if(pthread_cond_signal(cond)!= 0){
+        perror("Lock not woken up\n");
         return -1;
     }
     return 0;
