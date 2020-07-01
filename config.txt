@@ -10,7 +10,7 @@ E:3
 T:200
 >max numero prodotti acquisitati
 P:100
->bound per chiusura cassa(espresso in numero casse con un cliente in coda)
+>bound per chiusura cassa(espresso in numero casse con num clienti in coda < )
 S1:2
 >bound per apertura cassa(espresso in num clienti in coda)
 S2:10
