@@ -9,15 +9,19 @@
 
 //implementazione dell'interfaccia util.h
 
+double calcola_tempo(int start_sec, int start_usec, int end_sec, int end_usec){ 
+    return ((double)end_sec + ((double)end_usec) / 1000000) - ((double)start_sec + ((double)start_usec) / 1000000 );
+}
+
 int msleep(long msec){
     struct timespec t;
     int retval;
-    if(msec<0){
+    if(msec < 0){
         errno=EINVAL;
         return -1;
     }
-    t.tv_sec=msec/1000;
-    t.tv_nsec=(msec%1000)*1000000;
+    t.tv_sec = msec/1000;
+    t.tv_nsec = (msec%1000)*1000000;
     do {
         retval = nanosleep(&t, &t);
     } while (retval && errno == EINTR);

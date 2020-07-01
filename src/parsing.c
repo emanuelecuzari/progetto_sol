@@ -1,5 +1,4 @@
-
-
+#define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,25 +19,30 @@
 #define FREE_ON_FAIL(x, fail, h)                    \
             if(x == fail){                          \
                 icl_hash_destroy(h , free, free);   \
-                return -1;                          \     
+                return -1;                          \
             }
 
 #define SET_INT(config_param, h, key)                       \
             do{                                             \
-                int* tmp = (int*)icl_hash_find(h, key);     \
-                if(*tmp <= 0){                              \         
+                int x;                                      \
+                char* tmp = (char*)icl_hash_find(h, key);   \
+                if(sscanf(tmp, "%d", &x) != 1){             \
+                    perror("in sscanf\n");                  \
+                    return -1;                              \
+                }                                           \
+                if(x <= 0){                                 \
                     perror("in SET_INT");                   \
                     icl_hash_destroy(h , free, free);       \
                     return -1;                              \
                 }                                           \
-                config_param = *tmp;                        \
+                config_param = x;                           \
             }while(0)
 
 #define SET_CHAR(config_param, h, key)                      \
             do{                                             \
                 char* tmp = (char*)icl_hash_find(h, key);   \
-                int len = strlen(tmp);                      \         
-                strncpy(config_name, tmp, len);             \
+                int len = strlen(tmp);                      \
+                strncpy(config_param, tmp, len);             \
             }while(0)
 /*-------------------------------------------------------------------------------------*/
 
@@ -52,23 +56,19 @@ int parse(char* config_filename, config_t* config){
         return -1;
     }
     char buf[MAXARGS];
-    char* tag;
-    char* valore;
+    char* tag = NULL;
+    char* valore = NULL;
     while(fgets(buf, MAXARGS, fp) != NULL){
-        if(buf[0] = ">") continue;
-        tag = malloc(MAXINPUT * sizeof(char));
+        if(buf[0] == '>') continue;
+        tag = malloc(MAX_INPUT * sizeof(char));
         FREE_ON_FAIL(tag, NULL, hash);
-        valore = malloc(MAXINPUT * sizeof(char));
+        valore = malloc(MAX_INPUT * sizeof(char));
         FREE_ON_FAIL(valore, NULL, hash);
         if(sscanf(buf, "%[^:]:%[^\n]", tag, valore) != 2){
             perror("in sscanf\n");
             return -1;
         }
-        int len_tag = strlen(tag);
-        int len_val = strlen(valore);
-        tag[len_tag + 1] = '\0';
-        valore[len_val + 1] = '\0';
-        FREE_ON_FAIL(icl_hash_insert(hash, tag, valore), -1, hash);
+        FREE_ON_FAIL(icl_hash_insert(hash, tag, valore), NULL, hash);
     }
     FREE_ON_FAIL(fclose(fp), EOF, hash);
 

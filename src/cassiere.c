@@ -1,196 +1,214 @@
 #define _POSIX_C_SOURCE 200112L
+#include <cassiere.h>
+#include <cliente.h>
+#include <codaCassa.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <sys/time.h>
 #include <time.h>
-#include <signal.h>
-#include <cassiere.h>
-#include <codaCassa.h>
-#include <queue.h>
-#include <cliente.h>
 #include <util.h>
-
-/* pid del processo */
-extern pid_t pid;
 
 /* flags per distinguere cosa fare quando arriva segnale */
 extern volatile sig_atomic_t sig_hup;
 extern volatile sig_atomic_t sig_quit;
+extern volatile int stop_casse;
 
 /*-----------------------------------------MACRO---------------------------------------*/
-#define CHECK_NULL(x)                       \
-            if(x == NULL){                  \
-                perror("CRITICAL ERROR\n"); \
-                kill(pid, SIGKILL);         \
-            }
-
-#define T_SERVIZIO(fisso, n, t_singolo)     \
-            return (fisso + n*t_singolo)
-
-#define T_OPEN(start_sec, start_usec, end_sec, end_usec)                            \
-            return ((end_sec * 1000 + end_usec) - (start_sec * 1000 + start_usec))
+#define CHECK_NULL(x)               \
+    if (x == NULL) {                \
+        perror("CRITICAL ERROR\n"); \
+        exit(EXIT_FAILURE);         \
+    }
 /*-------------------------------------------------------------------------------------*/
 
-void* cassiere(void* arg){
+/*---------------------------------------------------------------------FUNZIONI DI UTILITA'---------------------------------------------------------------------------*/
+static inline int
+calcola_servizio(int fisso, int n, int t_singolo) { return (fisso + n * t_singolo); }
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-    /* maschera di segnali */
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGQUIT);
-    sigaddset(&set, SIGHUP);
-    sigaddset(&set, SIGKILL);
-    sigaddset(&set, SIGINT);
-    sigaddset(&set, SIGTSTP);
-    if(pthread_sigmask(SIG_SETMASK, &set, NULL)!=0){
-        perror("CRITICAL ERROR\n");
-        kill(pid, SIGKILL);
-    }
-
+void* cassiere(void* arg) {
     argsCassiere_t* cassa = (argsCassiere_t*)arg;
     struct timeval ts_apertura = {0, 0};
     struct timeval tend_apertura = {0, 0};
+    double t_incoda;
+    int myid = cassa->id;
+    size_t t_invio = cassa->t_notifica;
+    //int is_first = 1;
 
     /* inizio a calcolare tempo di apertura */
     gettimeofday(&ts_apertura, NULL);
-    while(1){
-
+    while (1) {
         /* controllo se la cassa è stata chiusa */
-        if(Lock_Acquire(cassa->mtx) != 0){
+        if (Lock_Acquire(cassa->mtx) != 0) {
             perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
+            exit(EXIT_FAILURE);
         }
-        if(*(cassa->set_close)) break;
-        if(Lock_Release(cassa->mtx) != 0){
+        if (*(cassa->set_close)) {
+        #if defined(DEBUG)
+                    printf("La cassa %d è stata chiusa\n", myid);
+        #endif
+            if (Lock_Release(cassa->mtx) != 0) {
+                perror("CRITICAL ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        if (Lock_Release(cassa->mtx) != 0) {
             perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
+            exit(EXIT_FAILURE);
         }
 
         /* controllo se sono arrivati segnali */
-        if(sig_hup || sig_quit) break;
+        if (sig_hup || sig_quit) break;
 
         void* test = pop(cassa->coda);
+        if (test == NOCLIENT) break;
         CHECK_NULL(test);
 
-        argsCliente_t* cliente = (argsCliente_t*)test;
-
-        /* cliente non è più in attesa in coda, risevglio il thread */
-        if(Lock_Acquire(cliente->personal) != 0){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
-        }
-        *(cliente->set_wait) = 0;
-        if(cond_signal(cliente->wait) == -1){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
-        }
-        if(Lock_Release(cliente->personal) != 0){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
-        }
+        argsClienti_t* cliente = (argsClienti_t*)test;
 
         /* fine tempo attesa in coda del cliente */
-        gettimeofday(cliente->tend_incoda, NULL);
-        
-        size_t service_time = T_SERVIZIO(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
-        if(insertLQueue(cassa->t_servizio, service_time) == -1){
-            perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
-        }
+        gettimeofday(&cliente->tend_incoda, NULL);
+        t_incoda = calcola_tempo(cliente->ts_incoda.tv_sec, cliente->ts_incoda.tv_usec, cliente->tend_incoda.tv_sec, cliente->tend_incoda.tv_usec);
+        #if defined(DEBUG)
+            printf("Il cliente %d è stato in coda per %.8f secondi\n", cliente->id, (float)t_incoda);
+        #endif
+
+        size_t service_time = calcola_servizio(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
+        cliente->t_servizio = ((double)service_time) / 1000;
 
         /* gestione invio notifica a direttore */
-        size_t t_invio = cassa->t_notifica;
-        while(t_invio <= service_time){
-            if(Lock_Acquire(cassa->sent) != 0){
+        while (t_invio <= service_time) {
+            if (Lock_Acquire(cassa->sent) != 0) {
                 perror("CRITICAL ERROR\n");
-                kill(pid, SIGKILL);
+                exit(EXIT_FAILURE);
             }
+            #if defined(DEBUG)
+                printf("La cassa %d ha inviato la notifica\n", myid);
+            #endif
             *(cassa->update) = 1;
             *(cassa->notifica) = cassa->coda->clienti;
-            if(cond_signal(cassa->sent_cond) == -1){
+            if (cond_signal(cassa->sent_cond) == -1) {
                 perror("CRITICAL ERROR\n");
-                kill(pid, SIGKILL);
+                exit(EXIT_FAILURE);
             }
-            if(Lock_Release(cassa->sent) != 0){
+            if (Lock_Release(cassa->sent) != 0) {
                 perror("CRITICAL ERROR\n");
-                kill(pid, SIGKILL);
+                exit(EXIT_FAILURE);
             }
             msleep(t_invio);
             service_time -= t_invio;
             t_invio = cassa->t_notifica;
-
         }
         msleep(service_time);
         t_invio -= service_time;
         cassa->clienti_serviti++;
-    }
-    gettimeofday(cassa->tend_apertura, NULL);
-    cassa->opening_time = T_OPEN(ts_apertura.tv_sec, ts_apertura.tv_usec, tend_apertura.tv_sec, tend_apertura.tv_usec);
-    printf("La cassa %d è rimasta aperta per %.8f secondi\n", cassa->id, (float)cassa->opening_time);
-    if(sig_hup){
-        while(cassa->coda->clienti != 0){
-            void* test = pop(cassa->coda);
-            CHECK_NULL(test);
-            argsCliente_t* customer = (argsCliente_t*)test;
+        cassa->tot_acquisti += cliente->num_prodotti;
 
-            gettimeofday(cliente->tend_incoda, NULL);
-
-            size_t service_time = T_SERVIZIO(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
-            if(insertLQueue(cassa->t_servizio, service_time) == -1){
+        /* cliente non è più in attesa in coda, risevglio il thread */
+        if (Lock_Acquire(cliente->personal) != 0) {
             perror("CRITICAL ERROR\n");
-            kill(pid, SIGKILL);
-            }
-            msleep(service_time);
-            cassa->clienti_serviti;
+            exit(EXIT_FAILURE);
         }
-        pthread_exit((void*)0);
+        *(cliente->set_wait) = 0;
+        if (cond_signal(cliente->wait) == -1) {
+            perror("CRITICAL ERROR\n");
+            exit(EXIT_FAILURE);
+        }
+        if (Lock_Release(cliente->personal) != 0) {
+            perror("CRITICAL ERROR\n");
+            exit(EXIT_FAILURE);
+        }
     }
-    else if(sig_quit){
-        /* servo solo il primo cliente */
-        void* test = pop(cassa->coda);
-        CHECK_NULL(test);
-        argsCliente_t* customer = (argsCliente_t*)test;
-
-        gettimeofday(cliente->tend_incoda, NULL);
-
-        size_t service_time = T_SERVIZIO(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
-        if(insertLQueue(cassa->t_servizio, service_time) == -1){
+    if (Lock_Acquire(cassa->sent) != 0) {
         perror("CRITICAL ERROR\n");
-        kill(pid, SIGKILL);
+        exit(EXIT_FAILURE);
+    }
+    if (cond_signal(cassa->sent_cond) == -1) {
+        perror("CRITICAL ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+    if (Lock_Release(cassa->sent) != 0) {
+        perror("CRITICAL ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+    argsClienti_t* customer = NULL;
+
+    if (sig_quit || sig_hup) {
+        while (!stop_casse) {
+            if (cassa->coda->clienti == 0) continue;
+
+            void* test = pop(cassa->coda);
+            if (test == NOCLIENT) break;
+            CHECK_NULL(test);
+            customer = (argsClienti_t*)test;
+
+            if (sig_hup) {
+                gettimeofday(&customer->tend_incoda, NULL);
+                t_incoda = calcola_tempo(customer->ts_incoda.tv_sec, customer->ts_incoda.tv_usec, customer->tend_incoda.tv_sec, customer->tend_incoda.tv_usec);
+                #if defined(DEBUG)
+                    printf("Il cliente %d è stato in coda per %.8f secondi\n", customer->id, (float)t_incoda);
+                #endif
+
+                size_t service_time = calcola_servizio(cassa->tempo_fisso, customer->num_prodotti, cassa->gestione_p);
+                customer->t_servizio = ((double)service_time) / 1000;
+                msleep(service_time);
+                cassa->clienti_serviti++;
+                cassa->tot_acquisti += customer->num_prodotti;
+            }
+
+            if (Lock_Acquire(customer->personal) != 0) {
+                perror("CRITICAL ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+            *(customer->set_wait) = 0;
+            if (cond_signal(customer->wait) == -1) {
+                perror("CRITICAL ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+            if (Lock_Release(customer->personal) != 0) {
+                perror("CRITICAL ERROR\n");
+                exit(EXIT_FAILURE);
+            }
         }
-        msleep(service_time);
-        cassa->clienti_serviti++;
-        pthread_exit((void*)0);
     }
     /* chiusura standard */
-    else{
-        /* servo il primo cliente, sposto gli altri */
-        void* test = pop(cassa->coda);
-        CHECK_NULL(test);
-        argsCliente_t* customer = (argsCliente_t*)test;
-
-        gettimeofday(cliente->tend_incoda, NULL);
-
-        size_t service_time = T_SERVIZIO(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
-        if(insertLQueue(cassa->t_servizio, service_time) == -1){
-        perror("CRITICAL ERROR\n");
-        kill(pid, SIGKILL);
-        }
-        msleep(service_time);
-        cassa->cienti_serviti++;
-        
+    else {
         /* tutti gli altri clienti in coda devono cambiare cassa */
-        while(cassa->coda->clienti != 0){
-            if(Lock_Acquire(customer->personal) != 0){
+        while (1) {
+            if (cassa->coda->clienti == 0) break;
+
+            void* test = pop(cassa->coda);
+            if (test == NOCLIENT) break;
+            CHECK_NULL(test);
+            customer = (argsClienti_t*)test;
+
+            if (Lock_Acquire(customer->personal) != 0) {
                 perror("CRITICAL ERROR\n");
-                kill(pid, SIGKILL);
+                exit(EXIT_FAILURE);
             }
             *(customer->set_change) = 1;
-            if(Lock_Release(customer->personal) != 0){
+            *(customer->set_wait) = 0;
+            if (cond_signal(customer->wait) == -1) {
                 perror("CRITICAL ERROR\n");
-                kill(pid, SIGKILL);
+                exit(EXIT_FAILURE);
+            }
+            if (Lock_Release(customer->personal) != 0) {
+                perror("CRITICAL ERROR\n");
+                exit(EXIT_FAILURE);
             }
         }
     }
-    pthread_exit((void*)0);
+    gettimeofday(&tend_apertura, NULL);
+    double tmp_time = calcola_tempo(ts_apertura.tv_sec, ts_apertura.tv_usec, tend_apertura.tv_sec, tend_apertura.tv_usec);
+    #if defined(DEBUG)
+        printf("La cassa %d è rimasta aperta per %.8f secondi\n", myid, tmp_time);
+    #endif
+    #if defined(DEBUG)
+        printf("La cassa %d ha servito %d clienti\n", myid, cassa->clienti_serviti++);
+    #endif
+    cassa->opening_time += tmp_time;
+    return NULL;
 }
