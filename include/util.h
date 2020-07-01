@@ -5,6 +5,15 @@
 
 /*interfaccia per definzione di alcune funzioni di utlità*/
 
+double calcola_tempo(int start_sec, int start_usec, int end_sec, int end_usec);
+/**
+ * funzione per calcolare tempo 
+ * @param start_sec campo secondi del tempo di partenza
+ * @param start_usec campo microsecondi del tempo di partenza
+ * @param end_sec campo secondi del tempo di fine
+ * @param end_usec campo microsecondi del tempo di partenza
+ * @return valore calcolato
+*/
 
 int msleep(long msec);
 /**

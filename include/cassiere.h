@@ -11,17 +11,19 @@
 
 #define MIN 20
 #define MAX 80
+#define NOCLIENT (void*)-1
 
 /**
  * struttura per definizione argomenti principali del thread cassiere
 */
-typedef strcut Cassiere{
+typedef struct Cassiere{
     int id;                     /* id della cassa */
     int chiusure;               /* numero di chiusure */
     int clienti_serviti;        /* numero clienti serviti da cassa */
+    int tot_acquisti;           /* totale prodotti elebaorati */
+    double opening_time;        /* tempo di apertura della cassa */
     size_t tempo_fisso;         /* tempo fisso di gestione; compreso tra MIN e MAX */
     size_t gestione_p;          /* tempo di gestione di 1 prodotto */
-    size_t opening_time;        /* tempo di apertura della cassa */
     size_t t_notifica;          /* ogni quanto invio notifica */
     Queue_t* coda;              /* coda della cassa */
 
@@ -32,10 +34,9 @@ typedef strcut Cassiere{
     
     /* var condivise */
     int* update;                /* flag che indica se la notifica è stata inviata o no */
-    int* set_close              /* flag che indica chiusura della cassa */
-    int* notifica;               /* lunghezza coda da inviare a direttore */
-    LQueue_t* t_servizio;       /* lista con tempi servizio dei clienti */
-}argsCassiere_t*
+    int* set_close;             /* flag che indica chiusura della cassa */
+    int* notifica;              /* lunghezza coda da inviare a direttore */
+}argsCassiere_t;
 
 
 /**

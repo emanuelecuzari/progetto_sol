@@ -7,18 +7,16 @@
 
 #include <pthread.h>
 #include <cassiere.h>
-#include <icl_hash.h>
 #include <cliente.h>
 
 #define MIN_OPEN 1
 
 typedef struct Direttore{
-    int e;                          /* numero clienti che può entrare/uscire */
     int casse_tot;                  /* numero totale casse */
     int boundClose;                 /* soglia chiusura cassa */
     int boundOpen;                  /* soglia apertura cassa */
     int tot_clienti;                /* numero totale clienti in supermercato */
-    icl_hash_t* hashtable;          /* hash per mantenere valori notifiche delle code delle casse */
+    int* notifica;                  /* array per mantenimento numero clienti in coda per cassa */
 
     /* mutex e var di cond. */
     pthread_mutex_t* mtx;           /* mutex principale del sistema */
@@ -32,7 +30,7 @@ typedef struct Direttore{
     /* var condivise */
     int* casse_aperte;              /* num casse aperte */
     int* casse_chiuse;              /* num casse chiuse */
-    int* update;                    /* flag per ricezione notifica */
+    int* update;                    /* array per ricezione notifica */
     int* autorizzazione;            /* flag per autorizzazione a uscire */
     argsCassiere_t* cassieri;       /* array di cassieri */
     pthread_t* thid_casse;          /* array di thid casse */
