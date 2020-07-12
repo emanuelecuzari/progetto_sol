@@ -24,7 +24,6 @@ typedef struct Cliente{
     struct timeval tend_incoda;     /* fine attesa in coda */
     size_t t_acquisti;              /* tempo per acquisti */
     double t_supermercato;          /* tempo trascorso nel supermercato */
-    double t_servizio;              /* tempo in cui cliente è stato servito */
     char* log_name;                 /* nome file di log */
 
     /* mutex e var di cond. */

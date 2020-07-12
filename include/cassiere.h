@@ -26,6 +26,7 @@ typedef struct Cassiere{
     size_t gestione_p;          /* tempo di gestione di 1 prodotto */
     size_t t_notifica;          /* ogni quanto invio notifica */
     Queue_t* coda;              /* coda della cassa */
+    LQueue_t* tservice_list;    /* lista dei tempi di servizio di una cassa */
 
     /* mutex e var di cond. */
     pthread_mutex_t* mtx;       /* mutex principale del sistema */
