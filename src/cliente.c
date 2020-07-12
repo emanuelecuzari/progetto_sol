@@ -131,7 +131,7 @@ void* cliente(void* arg) {
             }
         }
         #if defined(DEBUG)
-                printf("Il cliente %d ha cambiato %d volte cassa\n", myid, client->cambi);
+            printf("Il cliente %d ha cambiato %d volte cassa\n", myid, client->cambi);
         #endif
     } 
     else {

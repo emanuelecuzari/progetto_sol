@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <util.h>
+#include <queue.h>
 
 /* flags per distinguere cosa fare quando arriva segnale */
 extern volatile sig_atomic_t sig_hup;
@@ -24,8 +25,8 @@ extern volatile int stop_casse;
 /*-------------------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------FUNZIONI DI UTILITA'---------------------------------------------------------------------------*/
-static inline int
-calcola_servizio(int fisso, int n, int t_singolo) { return (fisso + n * t_singolo); }
+static inline int calcola_servizio(int fisso, int n, int t_singolo) { return (fisso + n * t_singolo); }
+//static int invia_notifica(argsCassiere_t* c, double t_serv);
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void* cassiere(void* arg) {
@@ -35,7 +36,6 @@ void* cassiere(void* arg) {
     double t_incoda;
     int myid = cassa->id;
     size_t t_invio = cassa->t_notifica;
-    //int is_first = 1;
 
     /* inizio a calcolare tempo di apertura */
     gettimeofday(&ts_apertura, NULL);
@@ -46,9 +46,9 @@ void* cassiere(void* arg) {
             exit(EXIT_FAILURE);
         }
         if (*(cassa->set_close)) {
-        #if defined(DEBUG)
-                    printf("La cassa %d è stata chiusa\n", myid);
-        #endif
+            #if defined(DEBUG)
+                printf("La cassa %d è stata chiusa\n", myid);
+            #endif
             if (Lock_Release(cassa->mtx) != 0) {
                 perror("CRITICAL ERROR\n");
                 exit(EXIT_FAILURE);
@@ -76,8 +76,16 @@ void* cassiere(void* arg) {
             printf("Il cliente %d è stato in coda per %.8f secondi\n", cliente->id, (float)t_incoda);
         #endif
 
-        size_t service_time = calcola_servizio(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
-        cliente->t_servizio = ((double)service_time) / 1000;
+        double service_time = calcola_servizio(cassa->tempo_fisso, cliente->num_prodotti, cassa->gestione_p);
+
+        /* aggiungo tempo servizio in lista */
+        double* temp_tserv = malloc(sizeof(double));
+        CHECK_NULL(temp_tserv);
+        *temp_tserv = service_time / 1000;
+        if(insertLQueue(cassa->tservice_list, temp_tserv) != 0){
+            perror("CRITICAL ERROR\n");
+            exit(EXIT_FAILURE);
+        }
 
         /* gestione invio notifica a direttore */
         while (t_invio <= service_time) {
@@ -144,16 +152,25 @@ void* cassiere(void* arg) {
             if (test == NOCLIENT) break;
             CHECK_NULL(test);
             customer = (argsClienti_t*)test;
+            gettimeofday(&customer->tend_incoda, NULL);
+            t_incoda = calcola_tempo(customer->ts_incoda.tv_sec, customer->ts_incoda.tv_usec, customer->tend_incoda.tv_sec, customer->tend_incoda.tv_usec);
 
             if (sig_hup) {
-                gettimeofday(&customer->tend_incoda, NULL);
-                t_incoda = calcola_tempo(customer->ts_incoda.tv_sec, customer->ts_incoda.tv_usec, customer->tend_incoda.tv_sec, customer->tend_incoda.tv_usec);
                 #if defined(DEBUG)
                     printf("Il cliente %d è stato in coda per %.8f secondi\n", customer->id, (float)t_incoda);
                 #endif
 
-                size_t service_time = calcola_servizio(cassa->tempo_fisso, customer->num_prodotti, cassa->gestione_p);
-                customer->t_servizio = ((double)service_time) / 1000;
+                double service_time = calcola_servizio(cassa->tempo_fisso, customer->num_prodotti, cassa->gestione_p);
+
+                /* aggiungo tempo servizio in lista */
+                double* temp_tserv = malloc(sizeof(double));
+                CHECK_NULL(temp_tserv);
+                *temp_tserv = service_time / 1000;
+                if(insertLQueue(cassa->tservice_list, temp_tserv) != 0){
+                    perror("CRITICAL ERROR\n");
+                    exit(EXIT_FAILURE);
+                }
+
                 msleep(service_time);
                 cassa->clienti_serviti++;
                 cassa->tot_acquisti += customer->num_prodotti;
@@ -200,6 +217,7 @@ void* cassiere(void* arg) {
                 exit(EXIT_FAILURE);
             }
         }
+        cassa->chiusure += 1;
     }
     gettimeofday(&tend_apertura, NULL);
     double tmp_time = calcola_tempo(ts_apertura.tv_sec, ts_apertura.tv_usec, tend_apertura.tv_sec, tend_apertura.tv_usec);

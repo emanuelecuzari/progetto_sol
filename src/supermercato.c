@@ -15,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <util.h>
+#include <queue.h>
 
 /* flags per distinguere cosa fare quando arriva segnale */
 volatile sig_atomic_t sig_hup = 0;
@@ -35,17 +36,18 @@ static pthread_cond_t* wait;         /* var di cond. per attesa turno in coda */
 static pthread_cond_t sent_cond;     /* var cond. tra cassieri e direttore */
 static int* update;                  /* array per controllare che tutte le casse abbiano notificato */
 static int* notifica;
-static int* autorizzazione;          /* array di autorizzazioni per uscita clienti */
+static int* autorizzazione; /* array di autorizzazioni per uscita clienti */
 static int num_uscite = 0;
 static int casse_aperte;
 static int casse_chiuse;
 static int first_to_write = 1;
-static int id_cliente = 0;           /* corrisponderà al numero tottale di clienti entrati */
+static int id_cliente = 0; /* corrisponderà al numero tottale di clienti entrati */
 static Queue_t** code;
-static pthread_t* thid_casse;        /* array di thid casse */
-static pthread_t* thid_clienti;      /* array di thid clienti */
-static pthread_t thid_direttore;     /* thid del direttore */
-static config_t config;              /* struttura contenente i dati di configurazione */
+static LQueue_t** tservice_list;
+static pthread_t* thid_casse;    /* array di thid casse */
+static pthread_t* thid_clienti;  /* array di thid clienti */
+static pthread_t thid_direttore; /* thid del direttore */
+static config_t config;          /* struttura contenente i dati di configurazione */
 /*-------------------------------------------------------------------------------------------------*/
 
 /*-----------------------------------------MACRO---------------------------------------*/
@@ -92,10 +94,11 @@ static void set_signal_handler() {
         perror("sigaction SIGQUIT\n");
     }
 }
+
+static int write_filename(char* filename);
 /*------------------------------------------------------------------------------------------------------------------------------------*/
 
 int main(int argc, char* argv[]) {
-
     /* installo signal handler */
     set_signal_handler();
 
@@ -156,6 +159,11 @@ int main(int argc, char* argv[]) {
     CONFIG_PRINT("nome file di log: %s\n", config.filename);
     printf("\t\t---END CONFIG---\n");
 
+    if(write_filename(config.filename) == -1){
+        perror("CRITICAL ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
     /* dichiarazione strutture utili */
     argsDirettore_t director;                /* struttura del direttore */
     argsCassiere_t array_cassiere[config.k]; /* array di strutture dei cassieri */
@@ -177,6 +185,8 @@ int main(int argc, char* argv[]) {
     CHECK_NULL(wait);
     code = (Queue_t**)malloc(config.k * sizeof(Queue_t*));
     CHECK_NULL(code);
+    tservice_list = (LQueue_t**)malloc(config.k * sizeof(LQueue_t*));
+    CHECK_NULL(tservice_list);
     autorizzazione = malloc(config.c * sizeof(int));
     CHECK_NULL(autorizzazione);
     notifica = malloc(config.k * sizeof(int));
@@ -200,10 +210,8 @@ int main(int argc, char* argv[]) {
     }
 
     num_uscite = 0;
-    set_signal = 0;
     casse_aperte = config.casse_start;
     casse_chiuse = config.k - config.casse_start;
-
     for (size_t i = 0; i < config.k; i++) {
         /* apro solo il num di casse specificato nel file di config */
         if (i < config.casse_start) {
@@ -212,10 +220,13 @@ int main(int argc, char* argv[]) {
             set_close[i] = 1;
         code[i] = initQueue(config.c);
         CHECK_NULL(code[i]);
+        tservice_list[i] = init_LQueue();
+        CHECK_NULL(tservice_list[i]);
         notifica[i] = 0;
         update[i] = 0;
     }
 
+    set_signal = 0;
     for (size_t i = 0; i < config.c; i++) {
         set_wait[i] = 0;
         set_change[i] = 0;
@@ -234,6 +245,7 @@ int main(int argc, char* argv[]) {
         array_cassiere[i].opening_time = 0;
         array_cassiere[i].t_notifica = config.intervallo;
         array_cassiere[i].coda = code[i];
+        array_cassiere[i].tservice_list = tservice_list[i];
         array_cassiere[i].mtx = &mtx;
         array_cassiere[i].sent = &sent;
         array_cassiere[i].sent_cond = &sent_cond;
@@ -285,7 +297,6 @@ int main(int argc, char* argv[]) {
         array_cliente[i].tend_incoda = (struct timeval){0, 0};
         array_cliente[i].t_acquisti = (rand_r(&seed) % (config.t - MIN_T_ACQUISTI)) + MIN_T_ACQUISTI;
         array_cliente[i].t_supermercato = 0;
-        array_cliente[i].t_servizio = 0;
         array_cliente[i].mtx = &mtx;
         array_cliente[i].personal = &personal[i];
         array_cliente[i].ask_auth = &ask_auth;
@@ -357,7 +368,6 @@ int main(int argc, char* argv[]) {
                 array_cliente[i].tend_incoda = (struct timeval){0, 0};
                 array_cliente[i].t_acquisti = (rand_r(&seed) % (config.t - MIN_T_ACQUISTI)) + MIN_T_ACQUISTI;
                 array_cliente[i].t_supermercato = 0;
-                array_cliente[i].t_servizio = 0;
                 array_cliente[i].mtx = &mtx;
                 array_cliente[i].personal = &personal[i];
                 array_cliente[i].ask_auth = &ask_auth;
@@ -492,8 +502,10 @@ static void cleanup() {
 
     for (size_t i = 0; i < config.k; i++) {
         if (code[i]) delQueue(code[i]);
+        if (tservice_list[i]) deleteLQueue(tservice_list[i]);
     }
     if (code) free(code);
+    if (tservice_list) free(tservice_list);
 
     if (autorizzazione) free(autorizzazione);
 }
@@ -517,4 +529,17 @@ static void signal_handler(int sig) {
             break;
         }
     }
+}
+
+static int write_filename(char* filename){
+    FILE* fp;
+    if((fp = fopen("logfile_name.txt", "w")) == NULL){
+        return -1;
+    }
+
+    fprintf(fp, "%s", filename);
+    if(fclose(fp) == EOF){
+        return -1;
+    }
+    return 0;
 }
