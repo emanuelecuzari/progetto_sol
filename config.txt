@@ -21,4 +21,4 @@ TEMPO_GESTIONE_PROD:2
 >num casse aperte all'inizio
 CASSE_INIZIALI:3
 >nome del file di log
-FILENAME:stat.log
+FILENAME:statlog.txt
