@@ -1,24 +1,24 @@
 >Formato file:
 >NOME:VALORE
 >max casse
-K:4
+K:15
 >max clienti
-C:3
+C:150
 >numero di clienti che escono e entrano
-E:1
+E:10
 >max tempo acquisti
-T:200
+T:350
 >max numero prodotti acquisitati
-P:100
+P:70
 >bound per chiusura cassa(espresso in numero casse con un cliente in coda)
 S1:1
 >bound per apertura cassa(espresso in num clienti in coda)
-S2:10
+S2:20
 >intervallo trasmissione notifica
-INTERVALLO:300
+INTERVALLO:400
 >tempo per elaborazione di un prodotto
-TEMPO_GESTIONE_PROD:2
+TEMPO_GESTIONE_PROD:60
 >num casse aperte all'inizio
-CASSE_INIZIALI:2
+CASSE_INIZIALI:8
 >nome del file di log
 FILENAME:stat2.log
