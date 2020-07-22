@@ -20,7 +20,9 @@
 /*-------------------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------FUNZIONI DI UTILITA'---------------------------------------------------------------------------*/
-
+static int wait_to_pay(argsClienti_t* buyer);
+static int wait_authorize(argsClienti_t* buyer);
+static int exit_market(argsClienti_t* buyer);
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void* cliente(void* arg) {
@@ -35,7 +37,9 @@ void* cliente(void* arg) {
     /* inizio a calcolare tempo in supermercato */
     gettimeofday(&in_supermarket, NULL);
     msleep(buying);
+
     if (client->num_prodotti > 0) {
+
         /* array di 1 o 0 */
         int tmp[client->casse_tot];
 
@@ -108,20 +112,11 @@ void* cliente(void* arg) {
             }
 
             /* attesa turno */
-            if (Lock_Acquire(client->personal) != 0) {
+            if(wait_to_pay(client) != 0){
                 perror("CRITICAL ERROR\n");
                 exit(EXIT_FAILURE);
             }
-            while (*(client->set_wait)) {
-                if (cond_wait(client->wait, client->personal) == -1) {
-                    perror("CRITICAL ERROR\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-            if (Lock_Release(client->personal) != 0) {
-                perror("CRITICAL ERROR\n");
-                exit(EXIT_FAILURE);
-            }
+
             /* se cliente deve cambiare cassa, rieseguo ciclo */
             if (*(client->set_change) == 0) {
                 break;
@@ -135,21 +130,9 @@ void* cliente(void* arg) {
         #endif
     } 
     else {
+        
         //cliente non ha acquistato, richiede autorizzazione a uscire
-        if (Lock_Acquire(client->ask_auth) != 0) {
-            perror("CRITICAL ERROR\n");
-            exit(EXIT_FAILURE);
-        }
-        while (!(*(client->autorizzazione))) {
-            if (cond_wait(client->ask_auth_cond, client->ask_auth) == -1) {
-                perror("CRITICAL ERROR\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-        #if defined(DEBUG)
-            printf("autorizzazione concessa\n");
-        #endif
-        if (Lock_Release(client->ask_auth) != 0) {
+        if(wait_authorize(client) != 0){
             perror("CRITICAL ERROR\n");
             exit(EXIT_FAILURE);
         }
@@ -159,18 +142,8 @@ void* cliente(void* arg) {
     #if defined(DEBUG)
         printf("Il cliente %d si sta preparando a uscire\n", myid);
     #endif
-    if (Lock_Acquire(client->out) != 0) {
-        perror("CRITICAL ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-    *(client->is_out) = 1;
-    *(client->num_uscite) += 1;
-    if (cond_signal(client->out_cond) == -1) {
-        perror("CRITICAL ERROR\n");
-        exit(EXIT_FAILURE);
-    }
 
-    if (Lock_Release(client->out) != 0) {
+    if(exit_market(client) != 0){
         perror("CRITICAL ERROR\n");
         exit(EXIT_FAILURE);
     }
@@ -182,4 +155,53 @@ void* cliente(void* arg) {
     #endif
     print_cliente(client, client->log_name);
     return NULL;
+}
+
+static int wait_to_pay(argsClienti_t* buyer){
+    if (Lock_Acquire(buyer->personal) != 0) {
+        return -1;
+    }
+    while (*(buyer->set_wait)) {
+        if (cond_wait(buyer->wait, buyer->personal) == -1) {
+            return -1;
+        }
+    }
+    if (Lock_Release(buyer->personal) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int wait_authorize(argsClienti_t* buyer){
+    if (Lock_Acquire(buyer->ask_auth) != 0) {
+        return -1;
+    }
+    while (!(*(buyer->autorizzazione))) {
+        if (cond_wait(buyer->ask_auth_cond, buyer->ask_auth) == -1) {
+            return -1;
+        }
+    }
+    #if defined(DEBUG)
+        printf("autorizzazione concessa\n");
+    #endif
+    if (Lock_Release(buyer->ask_auth) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int exit_market(argsClienti_t* buyer){
+    if (Lock_Acquire(buyer->out) != 0) {
+        return -1;
+    }
+    *(buyer->is_out) = 1;
+    *(buyer->num_uscite) += 1;
+    if (cond_signal(buyer->out_cond) == -1) {
+        return -1;
+    }
+
+    if (Lock_Release(buyer->out) != 0) {
+        return -1;
+    }
+    return 0;
 }

@@ -26,7 +26,7 @@ extern volatile int stop_casse;
 
 /*---------------------------------------------------------------------FUNZIONI DI UTILITA'---------------------------------------------------------------------------*/
 static inline int calcola_servizio(int fisso, int n, int t_singolo) { return (fisso + n * t_singolo); }
-//static int invia_notifica(argsCassiere_t* c, double t_serv);
+static int invia_notifica(argsCassiere_t* c, int id);
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void* cassiere(void* arg) {
@@ -40,6 +40,7 @@ void* cassiere(void* arg) {
     /* inizio a calcolare tempo di apertura */
     gettimeofday(&ts_apertura, NULL);
     while (1) {
+
         /* controllo se la cassa è stata chiusa */
         if (Lock_Acquire(cassa->mtx) != 0) {
             perror("CRITICAL ERROR\n");
@@ -89,23 +90,12 @@ void* cassiere(void* arg) {
 
         /* gestione invio notifica a direttore */
         while (t_invio <= service_time) {
-            if (Lock_Acquire(cassa->sent) != 0) {
+
+            if(invia_notifica(cassa, myid) != 0){
                 perror("CRITICAL ERROR\n");
                 exit(EXIT_FAILURE);
             }
-            #if defined(DEBUG)
-                printf("La cassa %d ha inviato la notifica\n", myid);
-            #endif
-            *(cassa->update) = 1;
-            *(cassa->notifica) = cassa->coda->clienti;
-            if (cond_signal(cassa->sent_cond) == -1) {
-                perror("CRITICAL ERROR\n");
-                exit(EXIT_FAILURE);
-            }
-            if (Lock_Release(cassa->sent) != 0) {
-                perror("CRITICAL ERROR\n");
-                exit(EXIT_FAILURE);
-            }
+
             msleep(t_invio);
             service_time -= t_invio;
             t_invio = cassa->t_notifica;
@@ -130,6 +120,7 @@ void* cassiere(void* arg) {
             exit(EXIT_FAILURE);
         }
     }
+    /* chiudo o è arrivato segnale, considero l'invio della notifica come effetuato */
     if (Lock_Acquire(cassa->sent) != 0) {
         perror("CRITICAL ERROR\n");
         exit(EXIT_FAILURE);
@@ -230,3 +221,22 @@ void* cassiere(void* arg) {
     cassa->opening_time += tmp_time;
     return NULL;
 }
+
+static int invia_notifica(argsCassiere_t* c, int id){
+    if (Lock_Acquire(c->sent) != 0) {
+        return -1;
+    }
+    #if defined(DEBUG)
+        printf("La cassa %d ha inviato la notifica\n", id);
+    #endif
+    *(c->update) = 1;
+    *(c->notifica) = c->coda->clienti;
+    if (cond_signal(c->sent_cond) == -1) {
+        return -1;
+    }
+    if (Lock_Release(c->sent) != 0) {
+        return -1;
+    }
+    return 0;
+}
+    

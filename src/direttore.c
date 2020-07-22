@@ -17,6 +17,11 @@
 extern volatile sig_atomic_t sig_hup;
 extern volatile sig_atomic_t sig_quit;
 
+/*--------------------------------------------------------FUNZIONI DI UTILITA'--------------------------------------------------------*/
+static int wait_notify(argsDirettore_t* dir);
+static int authorize(argsDirettore_t* dir);
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+
 void* direttore(void* arg) {
     argsDirettore_t* director = (argsDirettore_t*)arg;
     struct timeval t = {0, 0};
@@ -44,13 +49,9 @@ void* direttore(void* arg) {
         }
 
         /* attendo notifica da parte di tutte le casse */
-        for (size_t i = 0; i < director->casse_tot; i++) {
-            while ((director->update[i] == 0) && (*(director->cassieri[i].set_close) == 0) && !(sig_hup || sig_quit)) {
-                if (cond_wait(director->sent_cond, director->sent) == -1) {
-                    perror("CRITICAL ERROR\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
+        if(wait_notify(director) != 0){
+            perror("CRITICAL ERROR\n");
+            exit(EXIT_FAILURE);
         }
 
         /* reset array notifiche */
@@ -160,28 +161,7 @@ void* direttore(void* arg) {
         }
 
         /* autorizzazione uscita cliente */
-        if (Lock_Acquire(director->ask_auth) != 0) {
-            perror("CRITICAL ERROR\n");
-            exit(EXIT_FAILURE);
-        }
-
-        /** 
-         * autorizza tutti i clienti all'uscita: 
-         * gli unici per cui l'autorizzazione è rilevante sono i clienti che non acquistano 
-        */
-        for (size_t i = 0; i < director->tot_clienti; i++) {
-            if (!(director->autorizzazione[i])) director->autorizzazione[i] = 1;
-        }
-
-        /* risevglio tutti i thread in attesa di autorizzazione */
-        if (pthread_cond_broadcast(director->ask_auth_cond) == -1) {
-            perror("CRITICAL ERROR\n");
-            exit(EXIT_FAILURE);
-        }
-        #if defined(DEBUG)
-            printf("Clienti autorizzati\n");
-        #endif
-        if (Lock_Release(director->ask_auth) != 0) {
+        if(authorize(director) != 0){
             perror("CRITICAL ERROR\n");
             exit(EXIT_FAILURE);
         }
@@ -192,21 +172,47 @@ void* direttore(void* arg) {
     #endif
 
     /* autorizzazione dei clienti rimasti */
-    if (Lock_Acquire(director->ask_auth) != 0) {
-        perror("CRITICAL ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-    for (size_t i = 0; i < director->tot_clienti; i++) {
-        if (!(director->autorizzazione[i])) director->autorizzazione[i] = 1;
-    }
-    if (pthread_cond_broadcast(director->ask_auth_cond) == -1) {
-        perror("CRITICAL ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-    if (Lock_Release(director->ask_auth) != 0) {
+    if(authorize(director) != 0){
         perror("CRITICAL ERROR\n");
         exit(EXIT_FAILURE);
     }
 
     return NULL;
+}
+
+static int wait_notify(argsDirettore_t* dir){
+    for (size_t i = 0; i < dir->casse_tot; i++) {
+        while ((dir->update[i] == 0) && (*(dir->cassieri[i].set_close) == 0) && !(sig_hup || sig_quit)) {
+            if (cond_wait(dir->sent_cond, dir->sent) == -1) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int authorize(argsDirettore_t* dir){
+     if (Lock_Acquire(dir->ask_auth) != 0) {
+        return -1;
+    }
+
+    /** 
+     * autorizza tutti i clienti all'uscita: 
+     * gli unici per cui l'autorizzazione è rilevante sono i clienti che non acquistano 
+    */
+    for (size_t i = 0; i < dir->tot_clienti; i++) {
+        if (!(dir->autorizzazione[i])) dir->autorizzazione[i] = 1;
+    }
+
+    /* risevglio tutti i thread in attesa di autorizzazione */
+    if (pthread_cond_broadcast(dir->ask_auth_cond) == -1) {
+        return -1;
+    }
+    #if defined(DEBUG)
+        printf("Clienti autorizzati\n");
+    #endif
+    if (Lock_Release(dir->ask_auth) != 0) {
+        return -1;
+    }
+    return 0;
 }

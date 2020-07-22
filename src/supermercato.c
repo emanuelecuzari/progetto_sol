@@ -36,18 +36,18 @@ static pthread_cond_t* wait;         /* var di cond. per attesa turno in coda */
 static pthread_cond_t sent_cond;     /* var cond. tra cassieri e direttore */
 static int* update;                  /* array per controllare che tutte le casse abbiano notificato */
 static int* notifica;
-static int* autorizzazione; /* array di autorizzazioni per uscita clienti */
+static int* autorizzazione;          /* array di autorizzazioni per uscita clienti */
 static int num_uscite = 0;
 static int casse_aperte;
 static int casse_chiuse;
 static int first_to_write = 1;
-static int id_cliente = 0; /* corrisponderà al numero tottale di clienti entrati */
+static int id_cliente = 0;           /* corrisponderà al numero tottale di clienti entrati */
 static Queue_t** code;
 static LQueue_t** tservice_list;
-static pthread_t* thid_casse;    /* array di thid casse */
-static pthread_t* thid_clienti;  /* array di thid clienti */
-static pthread_t thid_direttore; /* thid del direttore */
-static config_t config;          /* struttura contenente i dati di configurazione */
+static pthread_t* thid_casse;        /* array di thid casse */
+static pthread_t* thid_clienti;      /* array di thid clienti */
+static pthread_t thid_direttore;     /* thid del direttore */
+static config_t config;              /* struttura contenente i dati di configurazione */
 /*-------------------------------------------------------------------------------------------------*/
 
 /*-----------------------------------------MACRO---------------------------------------*/
@@ -83,18 +83,7 @@ static config_t config;          /* struttura contenente i dati di configurazion
 /*--------------------------------------------------------FUNZIONI DI UTILITA'--------------------------------------------------------*/
 static void cleanup();
 static void signal_handler(int sig);
-static void set_signal_handler() {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = signal_handler;
-    if (sigaction(SIGHUP, &sa, NULL) == -1) {
-        perror("sigaction SIGHUP\n");
-    }
-    if (sigaction(SIGQUIT, &sa, NULL) == -1) {
-        perror("sigaction SIGQUIT\n");
-    }
-}
-
+static void set_signal_handler();
 static int write_filename(char* filename);
 /*------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -542,4 +531,16 @@ static int write_filename(char* filename){
         return -1;
     }
     return 0;
+}
+
+static void set_signal_handler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    if (sigaction(SIGHUP, &sa, NULL) == -1) {
+        perror("sigaction SIGHUP\n");
+    }
+    if (sigaction(SIGQUIT, &sa, NULL) == -1) {
+        perror("sigaction SIGQUIT\n");
+    }
 }
